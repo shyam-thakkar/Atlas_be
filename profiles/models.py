@@ -16,6 +16,7 @@ class Resume(models.Model):
 
 class ResumeProcessingStatus(models.Model):
     STATUS_CHOICES = [
+        ('not_uploaded', 'Not Uploaded'),
         ('uploaded', 'Uploaded'),
         ('raw_extracting', 'Raw Extracting'),
         ('raw_extracted', 'Raw Extracted'),
@@ -28,7 +29,7 @@ class ResumeProcessingStatus(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='resume_status', db_index=True)
     resume = models.OneToOneField(Resume, on_delete=models.CASCADE, related_name='processing_status')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='uploaded')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='not_uploaded')
     error_message = models.TextField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 

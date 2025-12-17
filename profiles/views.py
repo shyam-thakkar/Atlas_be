@@ -65,13 +65,11 @@ class ResumeStatusView(APIView):
     def get(self, request):
         status_data = ResumeProcessingStatus.objects.filter(user=request.user).first()
 
-        if not status_data:
-            return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
-
-        current_status = status_data.status
+        current_status = status_data.status if status_data else 'not_uploaded'
         
         # Calculate progress
         status_map = {
+             'not_uploaded': 0,
              'uploaded': 10,
              'raw_extracting': 25,
              'raw_extracted': 40,
@@ -89,10 +87,12 @@ class ResumeStatusView(APIView):
         can_publish = current_status == 'completed'
         
         message = ""
-        if current_status == 'review_required':
+        if current_status == 'not_uploaded':
+             message = "Upload a resume to get started."
+        elif current_status == 'review_required':
             message = "Please review extracted data and confirm to publish."
         elif current_status == 'failed':
-            message = f"Processing failed: {status_data.error_message}"
+            message = f"Processing failed: {status_data.error_message if status_data else 'Unknown error'}"
         elif current_status == 'completed':
             message = "Portfolio ready to publish."
         else:
