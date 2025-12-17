@@ -17,10 +17,12 @@ class Resume(models.Model):
 class ResumeProcessingStatus(models.Model):
     STATUS_CHOICES = [
         ('uploaded', 'Uploaded'),
-        ('extracting', 'Extracting'),
-        ('extracted', 'Extracted'),
-        ('analyzing', 'Analyzing'),
-        ('generated', 'Generated'),
+        ('raw_extracting', 'Raw Extracting'),
+        ('raw_extracted', 'Raw Extracted'),
+        ('structure_extracting', 'Structure Extracting'),
+        ('structure_extracted', 'Structure Extracted'),
+        ('review_required', 'Review Required'),
+        ('completed', 'Completed'),
         ('failed', 'Failed'),
     ]
 

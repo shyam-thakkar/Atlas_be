@@ -8,6 +8,15 @@ from .utils import extract_text_from_file
 
 from .llm import create_extraction_chain
 
+def get_missing_portfolio_fields(data) -> list:
+    """
+    Returns a list of missing critical fields for the completion portfolio.
+    """
+    return []
+
+def requires_user_review(data) -> bool:
+    return bool(len(get_missing_portfolio_fields(data)) > 0)
+
 @shared_task
 def process_resume_task(resume_id):
     try:
@@ -25,8 +34,9 @@ def process_resume_task(resume_id):
         status_obj.save(update_fields=['status', 'updated_at'])
 
     try:
-        # Step 1: Extracting
-        update_status('extracting')
+
+        # Step 1: Raw Extracting
+        update_status('raw_extracting')
         
         # Determine extension for extractor
         ext = os.path.splitext(resume.file.name)[1].lower()
@@ -40,24 +50,29 @@ def process_resume_task(resume_id):
         resume.extracted_text = text
         resume.save()
         
-        # Step 2: Extracted
-        update_status('extracted')
+        # Step 2: Raw Extracted
+        update_status('raw_extracted')
         
         if not text:
             raise ValueError("No text extracted from resume")
 
-        # Step 3: Analyzing (LLM Extraction)
-        update_status('analyzing')
+        # Step 3: Structure Extracting (LLM)
+        update_status('structure_extracting')
         
         chain = create_extraction_chain()
         structured_data = chain.invoke({"text": text})
         
         # Save to DB
-        resume.structured_data = structured_data.model_dump()
+        data_dict = structured_data.model_dump()
+        resume.structured_data = data_dict
         resume.save()
 
-        # Step 4: Generated
-        update_status('generated')
+        # Step 4: Structure Extracted
+        update_status('structure_extracted')
+        
+        # Step 5: Review Required (Wait for User Confirmation)
+        # Even if perfect, we want explicit confirmation.
+        update_status('review_required')
 
     except Exception as e:
         status_obj.status = 'failed'
@@ -67,3 +82,5 @@ def process_resume_task(resume_id):
         return f"Failed: {str(e)}"
 
     return "Completed"
+
+

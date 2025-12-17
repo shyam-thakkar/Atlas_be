@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Resume, ResumeProcessingStatus
 from .serializers import ResumeSerializer
-from .tasks import process_resume_task
+from .tasks import process_resume_task, requires_user_review, get_missing_portfolio_fields
 
 class ResumeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -63,24 +63,49 @@ class ResumeStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Optimized query: Fetch only 'status' field using the index on 'user'
-        # values() ensures we don't load the model instance, just the dict
-        status_data = ResumeProcessingStatus.objects.filter(user=request.user).values('status').first()
+        status_data = ResumeProcessingStatus.objects.filter(user=request.user).first()
 
         if not status_data:
             return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
 
-        current_status = status_data['status']
-        etag = f'"{current_status}"'
+        current_status = status_data.status
+        
+        # Calculate progress
+        status_map = {
+             'uploaded': 10,
+             'raw_extracting': 25,
+             'raw_extracted': 40,
+             'structure_extracting': 60,
+             'structure_extracted': 80,
+             'review_required': 90,
+             'completed': 100,
+             'failed': 0
+        }
+        progress = status_map.get(current_status, 0)
+        
+        can_review = current_status in ['structure_extracted', 'review_required', 'completed']
+        # Edit is allowed in same states as review
+        can_edit = can_review
+        can_publish = current_status == 'completed'
+        
+        message = ""
+        if current_status == 'review_required':
+            message = "Please review extracted data and confirm to publish."
+        elif current_status == 'failed':
+            message = f"Processing failed: {status_data.error_message}"
+        elif current_status == 'completed':
+            message = "Portfolio ready to publish."
+        else:
+            message = "Processing resume..."
 
-        # ETag Check for 304 Not Modified
-        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
-        if if_none_match == etag:
-            return Response(status=status.HTTP_304_NOT_MODIFIED)
-
-        response = Response({"status": current_status})
-        response['ETag'] = etag
-        return response
+        return Response({
+             "status": current_status,
+             "progress": progress,
+             "can_review": can_review,
+             "can_edit": can_edit,
+             "can_publish": can_publish,
+             "message": message
+        })
 
 class ResumeExtractedTextView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -102,15 +127,23 @@ class PortfolioStructuredDataView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Fetch only the structured_data field for the current user's resume
-        # optimized single query
+        # Guard: Check status first
+        status_obj = ResumeProcessingStatus.objects.filter(user=request.user).values('status').first()
+        if not status_obj:
+             return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
+             
+        allowed_states = ['structure_extracted', 'review_required', 'completed']
+        if status_obj['status'] not in allowed_states:
+             return Response(
+                 {"error": "Processing not finished", "status": status_obj['status']}, 
+                 status=status.HTTP_409_CONFLICT
+             )
+
+        # Fetch structured_data
         resume_data = Resume.objects.filter(user=request.user).values('structured_data').first()
 
-        if not resume_data:
-             return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
-
-        if not resume_data['structured_data']:
-             return Response({"error": "Structured data not generated yet"}, status=status.HTTP_404_NOT_FOUND)
+        if not resume_data or not resume_data['structured_data']:
+             return Response({"error": "Structured data missing"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(resume_data['structured_data'])
 
@@ -142,7 +175,58 @@ class PortfolioStructuredDataView(APIView):
             return Response({"error": "Validation failed", "details": e.errors()}, status=status.HTTP_400_BAD_REQUEST)
 
         # Save validated data
-        resume.structured_data = validated_obj.model_dump()
+        final_data = validated_obj.model_dump()
+        resume.structured_data = final_data
         resume.save()
+        
+        # Post-save: Ensure status is review_required (user must explicitly confirm completion)
+        # Even if data is valid, we don't auto-complete anymore.
+        status_obj = ResumeProcessingStatus.objects.get(resume=resume)
+        if status_obj.status != 'completed': # Don't revert if already completed? Or maybe we DO?
+             # User requested: "once user send any data in structured it is savd and one confirm api which makes the data to complete"
+             # So saving keeps it in 'review_required' until confirmed.
+             status_obj.status = 'review_required'
+             status_obj.save()
 
         return Response(resume.structured_data)
+
+class ConfirmPortfolioView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            resume = Resume.objects.get(user=request.user)
+        except Resume.DoesNotExist:
+            return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
+            
+        status_obj = ResumeProcessingStatus.objects.get(resume=resume)
+        
+        # Check for missing fields before completing
+        missing = get_missing_portfolio_fields(resume.structured_data)
+        if missing:
+             return Response({
+                 "error": "Cannot complete portfolio. Missing fields.", 
+                 "missing": missing
+             }, status=status.HTTP_400_BAD_REQUEST)
+             
+        status_obj.status = 'completed'
+        status_obj.save()
+        
+        return Response({"status": "completed"})
+
+class PortfolioPublishStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        resume_data = Resume.objects.filter(user=request.user).values('structured_data').first()
+        
+        if not resume_data:
+             return Response({"can_publish": False, "missing": ["resume"]}, status=status.HTTP_404_NOT_FOUND)
+             
+        data = resume_data['structured_data'] or {}
+        missing = get_missing_portfolio_fields(data)
+        
+        return Response({
+            "can_publish": len(missing) == 0,
+            "missing": missing
+        })
