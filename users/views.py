@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
-from .serializers import SignupSerializer, GoogleAuthSerializer
+from .serializers import SignupSerializer, GoogleAuthSerializer, UserSerializer
 
 User = get_user_model()
 
@@ -142,9 +142,5 @@ class UserMeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        return Response({
-            'id': user.id,
-            'email': user.email,
-            'name': user.name
-        })
+        serializer = UserSerializer(request.user, context={'request': request})
+        return Response(serializer.data)

@@ -1,16 +1,19 @@
 from typing import List, Optional
-from pydantic import BaseModel, HttpUrl, Field, ConfigDict, field_validator
+from pydantic import BaseModel, HttpUrl, Field, ConfigDict, field_validator, model_validator
 
 class Hero(BaseModel):
     full_name: str = Field(description="Full name of the developer")
     headline: str = Field(description="Professional headline (e.g. 'Software Engineer'). Generate a strong one if missing.")
     short_bio: str = Field(description="Short biography (max 200 chars). Generate an engaging summary of skills/role if missing.")
+    profile_image: Optional[str] = Field(default=None, description="URL to profile photo")
 
 class Socials(BaseModel):
-    github: str = Field(description="GitHub profile URL or empty string")
-    linkedin: str = Field(description="LinkedIn profile URL or empty string")
-    twitter: str = Field(description="Twitter profile URL or empty string")
-    portfolio: str = Field(description="Personal portfolio URL or empty string")
+    model_config = ConfigDict(extra='allow')  # Allow any additional social platforms
+    
+    github: str = Field(default="", description="GitHub profile URL or empty string")
+    linkedin: str = Field(default="", description="LinkedIn profile URL or empty string")
+    twitter: str = Field(default="", description="Twitter profile URL or empty string")
+    portfolio: str = Field(default="", description="Personal portfolio URL or empty string")
 
     @field_validator('github', 'linkedin', 'twitter', 'portfolio')
     @classmethod
@@ -18,6 +21,22 @@ class Socials(BaseModel):
         if v and not (v.startswith('http://') or v.startswith('https://')):
              raise ValueError('Must be a valid URL starting with http:// or https://')
         return v
+    
+    @model_validator(mode='after')
+    def validate_extra_socials(self):
+        # Validate any extra social links as well
+        if hasattr(self, '__pydantic_extra__') and self.__pydantic_extra__:
+            for key, value in self.__pydantic_extra__.items():
+                if value and isinstance(value, str):
+                    # Allow email addresses (plain or mailto:)
+                    if key.lower() == 'email':
+                        # Email can be plain email or mailto:
+                        if not (value.startswith('mailto:') or '@' in value):
+                            raise ValueError(f'{key}: Must be a valid email address or mailto: link')
+                    # All other socials must be URLs
+                    elif not (value.startswith('http://') or value.startswith('https://')):
+                        raise ValueError(f'{key}: Must be a valid URL starting with http:// or https://')
+        return self
 
 class Experience(BaseModel):
     company: str = Field(description="Company name")

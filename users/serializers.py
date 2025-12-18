@@ -9,10 +9,23 @@ from google.auth.transport import requests as google_requests
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
+    profile_image = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ('id', 'email', 'name', 'created_at')
-        read_only_fields = ('id', 'created_at')
+        fields = ('id', 'email', 'name', 'created_at', 'profile_image')
+        read_only_fields = ('id', 'created_at', 'profile_image')
+
+    def get_profile_image(self, obj):
+        try:
+             if hasattr(obj, 'resume') and obj.resume.profile_photo:
+                 request = self.context.get('request')
+                 if request:
+                      return request.build_absolute_uri(obj.resume.profile_photo.url)
+                 return obj.resume.profile_photo.url
+        except Exception:
+             pass
+        return None
 
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])

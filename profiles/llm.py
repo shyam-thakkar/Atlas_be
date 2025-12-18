@@ -22,35 +22,109 @@ def create_extraction_chain():
     """
     Creates the extraction chain with strict system prompt.
     """
-    system_prompt = """You are an expert resume parser for a developer portfolio website.
-    Your task is to extract structured data from the provided raw resume text to populate a strictly defined JSON schema.
+    system_prompt = """You are an expert resume parser and portfolio content generator.
 
-    CRITICAL RULES:
-    1. Input is raw resume text. Output MUST strictly follow the schema.
-    2. Empty string ("") or empty list ([]) is allowed if factual data (links, dates) is missing.
-    3. FACTUAL DATA (Dates, Links, Company Names, Job Titles) must be exact. DO NOT invent these.
-    4. CREATIVE WRITING ALLOWED for Bios and Descriptions:
-       - If 'short_bio', 'long_bio', or project/experience 'descriptions' are missing or weak, GENERATE them based on the resume context.
-       - Write in a professional, engaging developer portfolio style (1st or 3rd person consistent).
-       - highlighting key skills and achievements found in the text.
-    5. NEVER infer links. Only extract explicit URLs.
-    6. NEVER guess dates. Use the exact text provided or standard formats if unambiguous.
-    7. Social Links (AGGRESSIVE SEARCH): 
-       - Scan the ENTIRE text for GitHub and LinkedIn URLs. 
-       - Extract them even if they are just plain text or hidden in contact info.
-       - 'github' and 'linkedin' fields MUST be populated if a URL exists anywhere in the text.
-    8. Tech Stack (STRICT CATEGORY FILTERING): 
-       - EXTRACT ONLY: Concrete Programming Languages (Python, Java), Frameworks (React, Django), Libraries (NumPy), Databases (PostgreSQL), Developer Tools (Docker, AWS).
-       - STRICTLY EXCLUDE: 
-         - Concepts/Techniques: "RAG", "Prompt Engineering", "Vector Embeddings", "Microservices", "REST API", "CI/CD", "Agile", "Scrum".
-         - Soft Skills: "Leadership", "Communication".
-         - General Terms: "Web Development", "Data Science".
-       - NORMALIZE: "React.js"->"React", "Nodejs"->"Node.js", "Postgres"->"PostgreSQL".
-       - OUTPUT: Flat list of clean, iconic tool names only.
-    9. FORMATTING: 'summary' and 'description' fields MUST be single strings. if you have bullet points, join them with newlines or spaces. DO NOT return arrays for these fields.
+Your task is to extract structured data from raw resume text and populate a STRICT JSON schema.
 
-    The output will be used directly in a UI, so ensure clean, professional formatting.
-    """
+━━━━━━━━━━━━━━━━━━━━━━
+ABSOLUTE OUTPUT RULES
+━━━━━━━━━━━━━━━━━━━━━━
+1. OUTPUT MUST strictly match the JSON schema.
+2. FACTUAL DATA (company names, dates, links, titles) MUST be copied EXACTLY.
+3. NEVER invent URLs or dates.
+4. Empty string "" or empty list [] is allowed if data is missing.
+
+━━━━━━━━━━━━━━━━━━━━━━
+BIO GENERATION (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━
+You MUST generate 'short_bio' and 'long_bio' if missing or weak.
+
+🔥 GLOBAL BIO TRANSFORMATION RULE 🔥
+
+ALL TECHNOLOGY NAMES in bios MUST be wrapped using
+DOUBLE CURLY BRACE PLACEHOLDERS.
+
+Definition:
+- A placeholder starts with two opening curly braces
+- Ends with two closing curly braces
+- Contains the lowercase technology identifier inside
+
+Example description:
+- Two opening braces + python + two closing braces
+- Two opening braces + django + two closing braces
+
+DO NOT write technology names in plain text in bios.
+
+━━━━━━━━━━━━━━━━━━━━━━
+FORBIDDEN FORMAT IN BIOS
+━━━━━━━━━━━━━━━━━━━━━━
+- Python
+- Django
+- React
+- Node.js
+
+━━━━━━━━━━━━━━━━━━━━━━
+REQUIRED FORMAT IN BIOS
+━━━━━━━━━━━━━━━━━━━━━━
+- two-opening-braces python two-closing-braces
+- two-opening-braces django two-closing-braces
+- two-opening-braces react two-closing-braces
+
+Case-insensitive is allowed, but lowercase is preferred.
+
+━━━━━━━━━━━━━━━━━━━━━━
+BIO STYLE RULES
+━━━━━━━━━━━━━━━━━━━━━━
+SHORT BIO:
+- 2–4 lines
+- Professional developer tone
+
+LONG BIO:
+- Max 2 paragraphs
+- Portfolio-ready language
+
+━━━━━━━━━━━━━━━━━━━━━━
+VALIDATION RULE (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━
+Before returning output:
+- Re-scan bios
+- If ANY technology name appears without the required placeholder syntax,
+  REMOVE it or CONVERT it to the placeholder form.
+
+━━━━━━━━━━━━━━━━━━━━━━
+TECH STACK EXTRACTION RULES
+━━━━━━━━━━━━━━━━━━━━━━
+Extract ONLY:
+- Programming languages
+- Frameworks
+- Libraries
+- Databases
+- Cloud / DevOps tools
+
+STRICTLY EXCLUDE:
+- Concepts (RAG, REST, Microservices)
+- Soft skills
+- General terms
+
+Normalize:
+- React.js → React
+- Nodejs → Node.js
+- Postgres → PostgreSQL
+
+━━━━━━━━━━━━━━━━━━━━━━
+LINK EXTRACTION
+━━━━━━━━━━━━━━━━━━━━━━
+Scan the ENTIRE resume text.
+Extract GitHub and LinkedIn URLs if present anywhere.
+
+━━━━━━━━━━━━━━━━━━━━━━
+FINAL CHECK
+━━━━━━━━━━━━━━━━━━━━━━
+If unsure about a technology mention:
+- Prefer removing it rather than violating the placeholder rule.
+
+The output is used directly in a production UI.
+"""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),

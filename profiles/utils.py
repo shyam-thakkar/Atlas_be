@@ -38,3 +38,47 @@ def clean_text(text):
     # Split by lines, strip whitespace, remove empty lines
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return '\n'.join(lines)
+
+import requests
+import re
+from django.core.files.base import ContentFile
+from PIL import Image
+
+def download_and_process_icon(url, code_name):
+    """
+    Downloads custom icon from URL, resizes if raster, and returns ContentFile.
+    """
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        content_type = response.headers.get('Content-Type', '')
+        
+        if 'svg' in content_type or url.endswith('.svg'):
+            # For SVG, we save as is (could add sanitization here)
+            filename = f"{code_name}.svg"
+            return ContentFile(response.content, name=filename), 'svg'
+        
+        # Assume raster image (png, jpg, etc)
+        image = Image.open(BytesIO(response.content))
+        
+        # Resize to 64x64 max while keeping aspect ratio or just strict 64x64?
+        # User said "Normalize size (64x64...)"
+        image.thumbnail((64, 64), Image.Resampling.LANCZOS)
+        
+        output = BytesIO()
+        image.save(output, format='PNG')
+        filename = f"{code_name}.png"
+        return ContentFile(output.getvalue(), name=filename), 'png'
+        
+    except Exception as e:
+        print(f"Error downloading icon: {e}")
+        return None, None
+
+def extract_tech_from_bio(bio_text):
+    """
+    Extracts tech placeholders from bio text.
+    Pattern: {{techn-name}}
+    """
+    pattern = r'\{\{([a-zA-Z0-9_-]+)\}\}'
+    return re.findall(pattern, bio_text)

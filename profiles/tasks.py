@@ -64,6 +64,18 @@ def process_resume_task(resume_id):
         
         # Save to DB
         data_dict = structured_data.model_dump()
+        
+        # Clean tech_stack: remove {{}} if LLM accidentally added them
+        if 'tech_stack' in data_dict and isinstance(data_dict['tech_stack'], list):
+            cleaned_tech_stack = []
+            for tech in data_dict['tech_stack']:
+                # Remove {{ and }} if present
+                cleaned = tech.strip()
+                if cleaned.startswith('{{') and cleaned.endswith('}}'):
+                    cleaned = cleaned[2:-2].strip()
+                cleaned_tech_stack.append(cleaned)
+            data_dict['tech_stack'] = cleaned_tech_stack
+        
         resume.structured_data = data_dict
         resume.save()
 

@@ -18,3 +18,4 @@ channels-redis
 requests
 google-auth
 pgvector
+Pillow

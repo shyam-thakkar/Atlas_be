@@ -64,8 +64,10 @@ class ResumeStatusView(APIView):
 
     def get(self, request):
         status_data = ResumeProcessingStatus.objects.filter(user=request.user).first()
+        resume = Resume.objects.filter(user=request.user).first()
 
         current_status = status_data.status if status_data else 'not_uploaded'
+        has_profile_photo = bool(resume.profile_photo) if resume else False
         
         # Calculate progress
         status_map = {
@@ -98,13 +100,19 @@ class ResumeStatusView(APIView):
         else:
             message = "Processing resume..."
 
+        profile_photo_url = None
+        if resume and resume.profile_photo:
+             profile_photo_url = request.build_absolute_uri(resume.profile_photo.url)
+
         return Response({
              "status": current_status,
              "progress": progress,
              "can_review": can_review,
              "can_edit": can_edit,
              "can_publish": can_publish,
-             "message": message
+             "message": message,
+             "has_profile_photo": has_profile_photo,
+             "profile_image_url": profile_photo_url
         })
 
 class ResumeExtractedTextView(APIView):
@@ -139,13 +147,27 @@ class PortfolioStructuredDataView(APIView):
                  status=status.HTTP_409_CONFLICT
              )
 
-        # Fetch structured_data
-        resume_data = Resume.objects.filter(user=request.user).values('structured_data').first()
+        # Fetch full resume object
+        resume = Resume.objects.filter(user=request.user).first()
+        if not resume:
+             return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not resume_data or not resume_data['structured_data']:
+        if not resume.structured_data:
              return Response({"error": "Structured data missing"}, status=status.HTTP_404_NOT_FOUND)
+             
+        data = resume.structured_data
+        
+        # Inject profile_photo URL if available
+        if resume.profile_photo:
+            try:
+                photo_url = request.build_absolute_uri(resume.profile_photo.url)
+                if 'hero' not in data:
+                    data['hero'] = {}
+                data['hero']['profile_image'] = photo_url
+            except Exception:
+                pass # Fail silently if file issue
 
-        return Response(resume_data['structured_data'])
+        return Response(data)
 
     def patch(self, request):
         try:
@@ -172,10 +194,32 @@ class PortfolioStructuredDataView(APIView):
         try:
             validated_obj = PortfolioSchema(**updated_data)
         except ValidationError as e:
-            return Response({"error": "Validation failed", "details": e.errors()}, status=status.HTTP_400_BAD_REQUEST)
+            # Format errors to be JSON serializable
+            error_details = []
+            for error in e.errors():
+                error_details.append({
+                    'field': ' -> '.join(str(loc) for loc in error['loc']),
+                    'message': str(error['msg']),
+                    'type': error['type']
+                })
+            return Response({
+                "error": "Validation failed", 
+                "details": error_details
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Save validated data
-        final_data = validated_obj.model_dump()
+        # Save validated data (include extra fields like dynamic socials)
+        final_data = validated_obj.model_dump(mode='json', exclude_none=False)
+        
+        # Clean tech_stack: remove {{}} if present
+        if 'tech_stack' in final_data and isinstance(final_data['tech_stack'], list):
+            cleaned_tech_stack = []
+            for tech in final_data['tech_stack']:
+                cleaned = tech.strip()
+                if cleaned.startswith('{{') and cleaned.endswith('}}'):
+                    cleaned = cleaned[2:-2].strip()
+                cleaned_tech_stack.append(cleaned)
+            final_data['tech_stack'] = cleaned_tech_stack
+        
         resume.structured_data = final_data
         resume.save()
         
@@ -230,3 +274,259 @@ class PortfolioPublishStatusView(APIView):
             "can_publish": len(missing) == 0,
             "missing": missing
         })
+
+from django.db.models import Q
+from .models import TechRegistry
+from .serializers import TechRegistrySerializer
+from .utils import download_and_process_icon
+
+class TechSearchAPIView(APIView):
+    permission_classes = [permissions.AllowAny] # Search should be public
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+        if not query:
+             return Response({"error": "Query parameter 'q' is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Try exact match first (as-is, lowercased)
+        code_name_exact = query.lower()
+        
+        # Also try normalized version (spaces to hyphens)
+        code_name_normalized = query.lower().replace(' ', '-')
+        
+        # Try both variations
+        tech = None
+        try:
+            # First try exact match
+            tech = TechRegistry.objects.get(code_name=code_name_exact)
+        except TechRegistry.DoesNotExist:
+            # Then try normalized version
+            try:
+                tech = TechRegistry.objects.get(code_name=code_name_normalized)
+            except TechRegistry.DoesNotExist:
+                pass
+        
+        if tech:
+            serializer = TechRegistrySerializer(tech)
+            return Response(serializer.data)
+        else:
+            return Response({"error": f"Technology '{query}' not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class TechCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"TechCreate POST - Raw data: {request.data}")
+        logger.info(f"TechCreate POST - Content-Type: {request.content_type}")
+        logger.info(f"TechCreate POST - User: {request.user}")
+        
+        data = request.data.copy()
+        
+        # Support 'name' field as a convenience (user can send just 'name')
+        if 'name' in data and 'display_name' not in data:
+            data['display_name'] = data['name']
+        
+        # Handling icon URL processing if provided
+        icon_url = data.get('icon_source_url') or data.get('icon_url') # Support both keys
+        
+        # Auto-generate code_name if not provided
+        code_name = data.get('code_name', '').strip().lower().replace(' ', '-')
+        
+        # If user didn't provide code_name, derive from display_name
+        if not code_name and 'display_name' in data:
+             code_name = data['display_name'].strip().lower().replace(' ', '-')
+        
+        if not code_name:
+            logger.error(f"TechCreate POST - Missing name/display_name/code_name. Data: {data}")
+            return Response({"error": "Either 'name', 'display_name', or 'code_name' is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        data['code_name'] = code_name
+        data['created_by_user'] = request.user.id
+        
+        # If code_name exists, return existing (or error?)
+        # Let's return existing if found to avoid dupes
+        if TechRegistry.objects.filter(code_name=code_name).exists():
+             tech = TechRegistry.objects.get(code_name=code_name)
+             logger.info(f"TechCreate POST - Tech already exists: {code_name}")
+             return Response(TechRegistrySerializer(tech).data, status=status.HTTP_200_OK)
+
+        serializer = TechRegistrySerializer(data=data)
+        if serializer.is_valid():
+             tech = serializer.save()
+             logger.info(f"TechCreate POST - Created tech: {tech.display_name}")
+             
+             # Process Icon if URL provided and no file uploaded
+             if icon_url and not 'icon_path' in request.FILES:
+                  content_file, icon_type = download_and_process_icon(icon_url, code_name)
+                  if content_file:
+                       tech.icon_path.save(content_file.name, content_file, save=True)
+                       tech.icon_type = icon_type
+                       if 'icon_source_url' not in data:
+                            tech.icon_source_url = icon_url
+                       tech.save()
+                       logger.info(f"TechCreate POST - Icon downloaded for: {code_name}")
+             
+             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        logger.error(f"TechCreate POST - Validation errors: {serializer.errors}")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+from rest_framework.pagination import PageNumberPagination
+from rest_framework import generics
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+class TechListAPIView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
+    queryset = TechRegistry.objects.all().order_by('display_name')
+    serializer_class = TechRegistrySerializer
+    pagination_class = StandardResultsSetPagination
+    search_fields = ['display_name', 'code_name']
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        query = self.request.query_params.get('q', '').strip()
+        if query:
+            queryset = queryset.filter(
+                Q(display_name__icontains=query) | Q(code_name__icontains=query)
+            )
+        return queryset
+
+from .models import SocialRegistry
+from .serializers import SocialRegistrySerializer
+
+class SocialSearchAPIView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+        if not query:
+             return Response({"error": "Query parameter 'q' is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Normalize: lowercase, replace spaces with hyphens
+        code_name_exact = query.lower()
+        code_name_normalized = query.lower().replace(' ', '-')
+        
+        # Try both variations
+        social = None
+        try:
+            social = SocialRegistry.objects.get(code_name=code_name_exact)
+        except SocialRegistry.DoesNotExist:
+            try:
+                social = SocialRegistry.objects.get(code_name=code_name_normalized)
+            except SocialRegistry.DoesNotExist:
+                pass
+        
+        if social:
+            serializer = SocialRegistrySerializer(social)
+            return Response(serializer.data)
+        else:
+            return Response({"error": f"Social platform '{query}' not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class SocialListAPIView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
+    queryset = SocialRegistry.objects.all().order_by('display_name')
+    serializer_class = SocialRegistrySerializer
+    pagination_class = StandardResultsSetPagination
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        query = self.request.query_params.get('q', '').strip()
+        if query:
+            queryset = queryset.filter(
+                Q(display_name__icontains=query) | Q(code_name__icontains=query)
+            )
+        return queryset
+
+class SocialCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"SocialCreate POST - Raw data: {request.data}")
+        
+        data = request.data.copy()
+        
+        # Support 'name' field as a convenience
+        if 'name' in data and 'display_name' not in data:
+            data['display_name'] = data['name']
+        
+        # Handling icon URL processing if provided
+        icon_url = data.get('icon_source_url') or data.get('icon_url')
+        
+        # Auto-generate code_name if not provided
+        code_name = data.get('code_name', '').strip().lower().replace(' ', '-')
+        
+        if not code_name and 'display_name' in data:
+             code_name = data['display_name'].strip().lower().replace(' ', '-')
+        
+        if not code_name:
+            logger.error(f"SocialCreate POST - Missing name/display_name/code_name. Data: {data}")
+            return Response({"error": "Either 'name', 'display_name', or 'code_name' is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        data['code_name'] = code_name
+        data['created_by_user'] = request.user.id
+        
+        # If code_name exists, return existing
+        if SocialRegistry.objects.filter(code_name=code_name).exists():
+             social = SocialRegistry.objects.get(code_name=code_name)
+             logger.info(f"SocialCreate POST - Social already exists: {code_name}")
+             return Response(SocialRegistrySerializer(social).data, status=status.HTTP_200_OK)
+
+        serializer = SocialRegistrySerializer(data=data)
+        if serializer.is_valid():
+             social = serializer.save()
+             logger.info(f"SocialCreate POST - Created social: {social.display_name}")
+             
+             # Process Icon if URL provided
+             if icon_url and not 'icon_path' in request.FILES:
+                  content_file, icon_type = download_and_process_icon(icon_url, code_name)
+                  if content_file:
+                       social.icon_path.save(content_file.name, content_file, save=True)
+                       social.icon_type = icon_type
+                       if 'icon_source_url' not in data:
+                            social.icon_source_url = icon_url
+                       social.save()
+                       logger.info(f"SocialCreate POST - Icon downloaded for: {code_name}")
+             
+             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        logger.error(f"SocialCreate POST - Validation errors: {serializer.errors}")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ProfilePhotoUploadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        if 'profile_photo' not in request.FILES:
+            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        file = request.FILES['profile_photo']
+        resume = Resume.objects.filter(user=request.user).first()
+        if not resume:
+             return Response({"error": "Resume profile not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        resume.profile_photo = file
+        resume.save()
+        
+        photo_url = request.build_absolute_uri(resume.profile_photo.url)
+        
+        # Update structured data immediately
+        if not resume.structured_data:
+            resume.structured_data = {}
+        if 'hero' not in resume.structured_data:
+            resume.structured_data['hero'] = {}
+            
+        resume.structured_data['hero']['profile_image'] = photo_url
+        resume.save()
+
+        return Response({"profile_image": photo_url}, status=status.HTTP_200_OK)
