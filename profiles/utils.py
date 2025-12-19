@@ -82,3 +82,25 @@ def extract_tech_from_bio(bio_text):
     """
     pattern = r'\{\{([a-zA-Z0-9_-]+)\}\}'
     return re.findall(pattern, bio_text)
+
+def get_absolute_media_url(file_field):
+    """
+    Returns absolute URL for a media file using BASE_URL from settings.
+    
+    Args:
+        file_field: Django FileField or ImageField instance
+        
+    Returns:
+        str: Absolute URL or None if file doesn't exist
+    """
+    if not file_field:
+        return None
+    
+    from django.conf import settings
+    
+    # Get the relative URL
+    relative_url = file_field.url
+    
+    # Combine with BASE_URL
+    base_url = settings.BASE_URL.rstrip('/')
+    return f"{base_url}{relative_url}"

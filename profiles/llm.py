@@ -29,10 +29,10 @@ Your task is to extract structured data from raw resume text and populate a STRI
 ━━━━━━━━━━━━━━━━━━━━━━
 ABSOLUTE OUTPUT RULES
 ━━━━━━━━━━━━━━━━━━━━━━
-1. OUTPUT MUST strictly match the JSON schema.
-2. FACTUAL DATA (company names, dates, links, titles) MUST be copied EXACTLY.
-3. NEVER invent URLs or dates.
-4. Empty string "" or empty list [] is allowed if data is missing.
+1. OUTPUT MUST be ONLY the JSON object. 
+2. NO "Reasoning", "Thinking", or "Here is the output" text.
+3. FACTUAL DATA (company names, dates, links, titles) MUST be copied EXACTLY.
+4. NEVER invent URLs or dates.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 BIO GENERATION (CRITICAL)
@@ -56,40 +56,52 @@ Example description:
 DO NOT write technology names in plain text in bios.
 
 ━━━━━━━━━━━━━━━━━━━━━━
-FORBIDDEN FORMAT IN BIOS
+EXPERIENCE EXTRACTION
 ━━━━━━━━━━━━━━━━━━━━━━
-- Python
-- Django
-- React
-- Node.js
+For each job/role:
+- Extract company name EXACTLY as written
+- Extract role/title EXACTLY as written
+- Parse dates carefully (format: "Month Year" or "Present")
+- Generate a compelling summary if bullet points are brief
+- Focus on IMPACT and ACHIEVEMENTS, not just duties
+- Use action verbs and quantify results when possible
 
 ━━━━━━━━━━━━━━━━━━━━━━
-REQUIRED FORMAT IN BIOS
+PROJECT EXTRACTION (CRITICAL)
 ━━━━━━━━━━━━━━━━━━━━━━
-- two-opening-braces python two-closing-braces
-- two-opening-braces django two-closing-braces
-- two-opening-braces react two-closing-braces
+For each project, extract or generate:
 
-Case-insensitive is allowed, but lowercase is preferred.
+1. **name**: Project title (EXACT from resume)
+2. **description**: Compelling 2-3 sentence overview
+3. **technologies**: List of tech used (lowercase, normalized)
+4. **github_link**: GitHub URL if present (EXACT)
+5. **live_link**: Live demo URL if present (EXACT)
 
-━━━━━━━━━━━━━━━━━━━━━━
-BIO STYLE RULES
-━━━━━━━━━━━━━━━━━━━━━━
-SHORT BIO:
-- 2–4 lines
-- Professional developer tone
+6. **key_features**: List of 3-5 bullet points describing main features
+   - Focus on USER-FACING capabilities
+   - Be specific and technical
+   - Example: "Real-time pose detection using Google MoveNet"
 
-LONG BIO:
-- Max 2 paragraphs
-- Portfolio-ready language
+7. **technical_challenges**: List of 3-5 technical challenges solved
+   - Focus on ENGINEERING problems overcome
+   - Be specific about the difficulty
+   - Example: "Optimizing real-time pose estimation for web browsers"
 
-━━━━━━━━━━━━━━━━━━━━━━
-VALIDATION RULE (MANDATORY)
-━━━━━━━━━━━━━━━━━━━━━━
-Before returning output:
-- Re-scan bios
-- If ANY technology name appears without the required placeholder syntax,
-  REMOVE it or CONVERT it to the placeholder form.
+8. **year**: Year of completion (e.g., "2024")
+   - Extract from dates if mentioned
+   - Use current year if recent/ongoing
+   - Leave empty if truly unknown
+
+9. **project_type**: Classification of project
+   - Options: "Solo Project", "Team Project", "Academic Project", "Open Source"
+   - Infer from context if not explicitly stated
+   - Default to "Solo Project" if unclear
+
+GENERATION RULES:
+- If key_features are not explicit, GENERATE them from the description
+- If technical_challenges are not mentioned, INFER reasonable ones based on the tech stack
+- Make features and challenges SPECIFIC and IMPRESSIVE
+- Avoid generic statements like "Built a web app"
 
 ━━━━━━━━━━━━━━━━━━━━━━
 TECH STACK EXTRACTION RULES
@@ -118,10 +130,13 @@ Scan the ENTIRE resume text.
 Extract GitHub and LinkedIn URLs if present anywhere.
 
 ━━━━━━━━━━━━━━━━━━━━━━
-FINAL CHECK
+QUALITY STANDARDS
 ━━━━━━━━━━━━━━━━━━━━━━
-If unsure about a technology mention:
-- Prefer removing it rather than violating the placeholder rule.
+This output powers a PRODUCTION portfolio website.
+- Every field should be polished and professional
+- Descriptions should be compelling and clear
+- Features should WOW potential employers
+- Challenges should demonstrate technical depth
 
 The output is used directly in a production UI.
 """

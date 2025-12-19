@@ -79,6 +79,28 @@ def process_resume_task(resume_id):
         resume.structured_data = data_dict
         resume.save()
 
+        # --- NEW HYBRID PIPELINE ---
+        from .models import Portfolio, PortfolioAISnapshot
+        from .services import normalize_snapshot_service
+
+        # 1. Ensure Portfolio Exists
+        portfolio, _ = Portfolio.objects.get_or_create(
+            user=resume.user,
+            defaults={'title': f"{resume.user.name or 'User'}'s Portfolio"}
+        )
+
+        # 2. Create AI Snapshot
+        snapshot = PortfolioAISnapshot.objects.create(
+            portfolio=portfolio,
+            raw_resume_text=text,
+            extracted_jsonb=data_dict,
+            model_name="gemini-2.0-flash-exp"
+        )
+
+        # 3. Normalize Data
+        normalize_snapshot_service(portfolio, snapshot)
+        # ---------------------------
+
         # Step 4: Structure Extracted
         update_status('structure_extracted')
         

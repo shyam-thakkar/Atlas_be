@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 User = get_user_model()
 
@@ -112,3 +114,150 @@ class SocialRegistry(models.Model):
     def save(self, *args, **kwargs):
         self.code_name = self.code_name.lower().replace(' ', '-')
         super().save(*args, **kwargs)
+
+class Portfolio(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='portfolios')
+    title = models.CharField(max_length=255, default="My Portfolio")
+    theme = models.CharField(max_length=50, default='default')
+    is_published = models.BooleanField(default=False)
+    missing_tech_stack = models.JSONField(default=list, blank=True, help_text="List of tech names not found in Registry")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.title}"
+
+class Media(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('logo', 'Logo'),
+    ]
+    owner_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    owner_object_id = models.PositiveIntegerField()
+    owner = GenericForeignKey('owner_content_type', 'owner_object_id')
+    
+    file = models.FileField(upload_to='media_assets/')
+    media_type = models.CharField(max_length=20, choices=MEDIA_TYPE_CHOICES, default='image')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.media_type} for {self.owner}"
+
+class CompanyRegistry(models.Model):
+    name = models.CharField(max_length=255)
+    domain = models.URLField(blank=True, null=True, help_text="e.g. google.com, used for logo fetching")
+    logo_file = models.ImageField(upload_to='company_registry_logos/', null=True, blank=True)
+    logo_url = models.URLField(blank=True, null=True)
+    
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "Company Registry"
+        ordering = ['name']
+        
+    def __str__(self):
+        return self.name
+
+class PortfolioProfile(models.Model):
+    portfolio = models.OneToOneField(Portfolio, on_delete=models.CASCADE, related_name='profile')
+    headline = models.CharField(max_length=255, blank=True, default='')
+    short_bio = models.TextField(blank=True, default='')
+    long_bio = models.TextField(blank=True, default='')
+    
+    def __str__(self):
+        return f"Profile for {self.portfolio}"
+
+class PortfolioTech(models.Model):
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='tech_stack')
+    tech = models.ForeignKey(TechRegistry, on_delete=models.CASCADE)
+    proficiency = models.CharField(max_length=50, blank=True, help_text="e.g. Expert, Intermediate")
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order']
+
+    def __str__(self):
+        return f"{self.tech.display_name} ({self.proficiency})"
+
+class PortfolioExperience(models.Model):
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='experiences')
+    company = models.ForeignKey(CompanyRegistry, on_delete=models.SET_NULL, null=True, blank=True)
+    company_name = models.CharField(max_length=255)
+    role = models.CharField(max_length=255)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    is_current = models.BooleanField(default=False)
+    logo = models.ImageField(upload_to='company_logos/', null=True, blank=True)
+    
+    # Media: Company logo can be accessed via Media generic relation
+    
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.role} at {self.company_name}"
+        
+    def save(self, *args, **kwargs):
+        if self.company and not self.company_name:
+            self.company_name = self.company.name
+        super().save(*args, **kwargs)
+
+class PortfolioProject(models.Model):
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='projects')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    repo_url = models.URLField(blank=True)
+    live_url = models.URLField(blank=True)
+    tech_used = models.ManyToManyField(TechRegistry, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    
+    # New fields for rich project details
+    key_features = models.JSONField(default=list, blank=True, help_text="List of key features")
+    technical_challenges = models.JSONField(default=list, blank=True, help_text="List of technical challenges")
+    year = models.CharField(max_length=10, blank=True, help_text="Year of completion (e.g., '2024')")
+    project_type = models.CharField(max_length=100, blank=True, help_text="e.g., 'Solo Project', 'Team Project'")
+    thumbnail = models.ImageField(upload_to='project_thumbnails/', null=True, blank=True, help_text="Project screenshot/thumbnail")
+    missing_technologies = models.JSONField(default=list, blank=True, help_text="List of tech names not found in Registry")
+
+    # Media: Screenshots via Media generic relation
+
+    class Meta:
+        ordering = ['display_order']
+
+    def __str__(self):
+        return self.title
+
+class PortfolioEducation(models.Model):
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='education')
+    institution = models.CharField(max_length=255)
+    degree = models.CharField(max_length=255)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.degree} at {self.institution}"
+
+class PortfolioSocial(models.Model):
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='socials')
+    social_platform = models.ForeignKey(SocialRegistry, on_delete=models.CASCADE)
+    url = models.URLField()
+    
+    def __str__(self):
+        return f"{self.social_platform.display_name}: {self.url}"
+
+class PortfolioAISnapshot(models.Model):
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='ai_snapshots')
+    raw_resume_text = models.TextField(blank=True)
+    extracted_jsonb = models.JSONField()
+    model_name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Snapshot {self.id} for {self.portfolio}"

@@ -132,6 +132,9 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Base URL for absolute media URLs (e.g., https://api.example.com or http://localhost:8000)
+BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 

@@ -51,6 +51,10 @@ class Project(BaseModel):
     technologies: List[str] = Field(description="List of technologies used")
     github_link: str = Field(description="GitHub repository URL or empty")
     live_link: str = Field(description="Live project URL or empty")
+    key_features: Optional[List[str]] = Field(default_factory=list, description="List of key features (bullet points)")
+    technical_challenges: Optional[List[str]] = Field(default_factory=list, description="List of technical challenges faced")
+    year: Optional[str] = Field(default="", description="Year of project completion (e.g., '2024')")
+    project_type: Optional[str] = Field(default="", description="Type of project (e.g., 'Solo Project', 'Team Project')")
 
     @field_validator('github_link', 'live_link')
     @classmethod
@@ -65,7 +69,7 @@ class About(BaseModel):
 class PortfolioSchema(BaseModel):
     model_config = ConfigDict(extra='forbid')
     hero: Hero
-    socials: Socials
+    socials: Optional[Socials] = Field(default_factory=Socials)
     tech_stack: List[str] = Field(description="List of technical skills")
     experience: List[Experience]
     projects: List[Project]

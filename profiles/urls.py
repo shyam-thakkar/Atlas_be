@@ -3,8 +3,9 @@ from .views import (
     PortfolioStructuredDataView, PortfolioPublishStatusView, ConfirmPortfolioView,
     TechSearchAPIView, TechCreateAPIView, TechListAPIView,
     SocialSearchAPIView, SocialCreateAPIView, SocialListAPIView,
-    ProfilePhotoUploadView
+    ProfilePhotoUploadView, CompanyLogoUploadView
 )
+from .views_project import ProjectThumbnailUploadView
 from django.urls import path
 
 urlpatterns = [
@@ -21,4 +22,6 @@ urlpatterns = [
     path('social/list/', SocialListAPIView.as_view(), name='social-list'),
     path('social/', SocialCreateAPIView.as_view(), name='social-create'),
     path('portfolio/photo/', ProfilePhotoUploadView.as_view(), name='profile-photo-upload'),
+    path('portfolio/company-logo/', CompanyLogoUploadView.as_view(), name='company-logo-upload'),
+    path('portfolio/project-thumbnail/', ProjectThumbnailUploadView.as_view(), name='project-thumbnail-upload'),
 ]

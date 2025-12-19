@@ -102,7 +102,8 @@ class ResumeStatusView(APIView):
 
         profile_photo_url = None
         if resume and resume.profile_photo:
-             profile_photo_url = request.build_absolute_uri(resume.profile_photo.url)
+            from .utils import get_absolute_media_url
+            profile_photo_url = get_absolute_media_url(resume.profile_photo)
 
         return Response({
              "status": current_status,
@@ -147,27 +148,18 @@ class PortfolioStructuredDataView(APIView):
                  status=status.HTTP_409_CONFLICT
              )
 
-        # Fetch full resume object
-        resume = Resume.objects.filter(user=request.user).first()
-        if not resume:
-             return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
-
-        if not resume.structured_data:
-             return Response({"error": "Structured data missing"}, status=status.HTTP_404_NOT_FOUND)
-             
-        data = resume.structured_data
+        # Fetch normalized Portfolio
+        from .models import Portfolio
+        from .serializers import PortfolioCompositionSerializer
         
-        # Inject profile_photo URL if available
-        if resume.profile_photo:
-            try:
-                photo_url = request.build_absolute_uri(resume.profile_photo.url)
-                if 'hero' not in data:
-                    data['hero'] = {}
-                data['hero']['profile_image'] = photo_url
-            except Exception:
-                pass # Fail silently if file issue
-
-        return Response(data)
+        portfolio = Portfolio.objects.filter(user=request.user).first()
+        if not portfolio:
+             # Fallback if migration hasn't run or something failed, though tasks should ensure it.
+             # Or return 404
+             return Response({"error": "Portfolio not found"}, status=status.HTTP_404_NOT_FOUND)
+             
+        serializer = PortfolioCompositionSerializer(portfolio, context={'request': request})
+        return Response(serializer.data)
 
     def patch(self, request):
         try:
@@ -178,61 +170,32 @@ class PortfolioStructuredDataView(APIView):
         current_data = resume.structured_data or {}
         incoming_data = request.data
 
-        # Helper for recursive merge
-        def deep_merge(target, source):
-            for key, value in source.items():
-                if isinstance(value, dict) and key in target and isinstance(target[key], dict):
-                    deep_merge(target[key], value)
-                else:
-                    target[key] = value
-            return target
+    def patch(self, request):
+        # Ensure Portfolio Exists
+        from .models import Portfolio
+        portfolio, _ = Portfolio.objects.get_or_create(user=request.user)
 
-        # Merge updates
-        updated_data = deep_merge(current_data.copy(), incoming_data)
-
-        # Validate with Pydantic
-        try:
-            validated_obj = PortfolioSchema(**updated_data)
-        except ValidationError as e:
-            # Format errors to be JSON serializable
-            error_details = []
-            for error in e.errors():
-                error_details.append({
-                    'field': ' -> '.join(str(loc) for loc in error['loc']),
-                    'message': str(error['msg']),
-                    'type': error['type']
-                })
-            return Response({
-                "error": "Validation failed", 
-                "details": error_details
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Save validated data (include extra fields like dynamic socials)
-        final_data = validated_obj.model_dump(mode='json', exclude_none=False)
+        # Use new update logic
+        from .update_service import update_portfolio_from_json
         
-        # Clean tech_stack: remove {{}} if present
-        if 'tech_stack' in final_data and isinstance(final_data['tech_stack'], list):
-            cleaned_tech_stack = []
-            for tech in final_data['tech_stack']:
-                cleaned = tech.strip()
-                if cleaned.startswith('{{') and cleaned.endswith('}}'):
-                    cleaned = cleaned[2:-2].strip()
-                cleaned_tech_stack.append(cleaned)
-            final_data['tech_stack'] = cleaned_tech_stack
-        
-        resume.structured_data = final_data
-        resume.save()
-        
-        # Post-save: Ensure status is review_required (user must explicitly confirm completion)
-        # Even if data is valid, we don't auto-complete anymore.
-        status_obj = ResumeProcessingStatus.objects.get(resume=resume)
-        if status_obj.status != 'completed': # Don't revert if already completed? Or maybe we DO?
-             # User requested: "once user send any data in structured it is savd and one confirm api which makes the data to complete"
-             # So saving keeps it in 'review_required' until confirmed.
-             status_obj.status = 'review_required'
-             status_obj.save()
+        # We perform the update inside a transaction to ensure atomicity
+        from django.db import transaction
+        with transaction.atomic():
+            update_portfolio_from_json(portfolio, request.data)
+            
+            # Also update status if needed
+            status_obj, c = ResumeProcessingStatus.objects.get_or_create(user=request.user)
+            # If we are editing, we are reviewing.
+            if status_obj.status != 'completed':
+                 status_obj.status = 'review_required'
+                 status_obj.save()
 
-        return Response(resume.structured_data)
+        # Return the updated data using the GET serializer logic
+        from .serializers import PortfolioCompositionSerializer
+        # Refresh from db to get clean state
+        portfolio.refresh_from_db()
+        serializer = PortfolioCompositionSerializer(portfolio, context={'request': request})
+        return Response(serializer.data)
 
 class ConfirmPortfolioView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -518,7 +481,8 @@ class ProfilePhotoUploadView(APIView):
         resume.profile_photo = file
         resume.save()
         
-        photo_url = request.build_absolute_uri(resume.profile_photo.url)
+        from .utils import get_absolute_media_url
+        photo_url = get_absolute_media_url(resume.profile_photo)
         
         # Update structured data immediately
         if not resume.structured_data:
@@ -530,3 +494,49 @@ class ProfilePhotoUploadView(APIView):
         resume.save()
 
         return Response({"profile_image": photo_url}, status=status.HTTP_200_OK)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from .models import CompanyRegistry
+from .serializers import CompanyRegistrySerializer
+
+class CompanyLogoUploadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        """
+        Upload a company logo file.
+        Expects: company_name (string) and logo (file)
+        """
+        company_name = request.data.get('company_name')
+        logo_file = request.FILES.get('logo')
+        
+        if not company_name:
+            return Response(
+                {"error": "company_name is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not logo_file:
+            return Response(
+                {"error": "logo file is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Find or create company (case-insensitive)
+        company = CompanyRegistry.objects.filter(name__iexact=company_name).first()
+        
+        if not company:
+            company = CompanyRegistry.objects.create(
+                name=company_name,
+                is_verified=False
+            )
+        
+        # Save the logo
+        company.logo_file = logo_file
+        company.save()
+        
+        # Return the logo URL
+        serializer = CompanyRegistrySerializer(company, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
