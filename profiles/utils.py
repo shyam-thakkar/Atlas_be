@@ -104,3 +104,39 @@ def get_absolute_media_url(file_field):
     # Combine with BASE_URL
     base_url = settings.BASE_URL.rstrip('/')
     return f"{base_url}{relative_url}"
+
+
+def normalize_url(url: str) -> str:
+    """
+    Normalizes a URL by adding https:// if no protocol is present.
+    
+    Args:
+        url: The URL string to normalize
+        
+    Returns:
+        str: Normalized URL with protocol, or empty string if invalid
+        
+    Examples:
+        - "github.com/user" -> "https://github.com/user"
+        - "https://example.com" -> "https://example.com"
+        - "user@example.com" -> "user@example.com"
+        - "mailto:user@test.com" -> "mailto:user@test.com"
+    """
+    if not url or not isinstance(url, str):
+        return ""
+    
+    url = url.strip()
+    if not url:
+        return ""
+    
+    # Already has protocol
+    if url.startswith('http://') or url.startswith('https://'):
+        return url
+    
+    # Email-related - don't add http
+    if url.startswith('mailto:') or '@' in url:
+        return url
+    
+    # Add https:// by default
+    return f"https://{url}"
+

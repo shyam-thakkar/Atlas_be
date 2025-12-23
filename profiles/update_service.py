@@ -4,6 +4,7 @@ from .models import (
     PortfolioProject, PortfolioEducation, PortfolioSocial, TechRegistry, SocialRegistry,
     CompanyRegistry
 )
+from .utils import normalize_url
 
 def update_portfolio_from_json(portfolio, data):
     """
@@ -117,8 +118,8 @@ def update_portfolio_from_json(portfolio, data):
                 portfolio=portfolio,
                 title=proj.get('title') or proj.get('name', ''),
                 description=proj.get('description', ''),
-                repo_url=proj.get('repo_url') or proj.get('github_link', ''),
-                live_url=proj.get('live_url') or proj.get('live_link', ''),
+                repo_url=normalize_url(proj.get('repo_url') or proj.get('github_link', '')),
+                live_url=normalize_url(proj.get('live_url') or proj.get('live_link', '')),
                 key_features=proj.get('key_features', []),
                 technical_challenges=proj.get('technical_challenges', []),
                 year=proj.get('year', ''),
@@ -205,7 +206,7 @@ def update_portfolio_from_json(portfolio, data):
                 code = key.lower().replace(' ', '-')
                 s_reg = SocialRegistry.objects.filter(code_name=code).first()
                 if s_reg:
-                    PortfolioSocial.objects.create(portfolio=portfolio, social_platform=s_reg, url=val)
+                    PortfolioSocial.objects.create(portfolio=portfolio, social_platform=s_reg, url=normalize_url(val))
 
     # 7. Contact Section
     if 'contact' in data:

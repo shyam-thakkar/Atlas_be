@@ -18,24 +18,20 @@ class Socials(BaseModel):
     @field_validator('github', 'linkedin', 'twitter', 'portfolio')
     @classmethod
     def validate_url(cls, v):
-        if v and not (v.startswith('http://') or v.startswith('https://')):
-             raise ValueError('Must be a valid URL starting with http:// or https://')
+        if v:
+            from .utils import normalize_url
+            return normalize_url(v)
         return v
     
     @model_validator(mode='after')
     def validate_extra_socials(self):
-        # Validate any extra social links as well
+        # Auto-fix URLs in extra social links
+        from .utils import normalize_url
         if hasattr(self, '__pydantic_extra__') and self.__pydantic_extra__:
             for key, value in self.__pydantic_extra__.items():
                 if value and isinstance(value, str):
-                    # Allow email addresses (plain or mailto:)
-                    if key.lower() == 'email':
-                        # Email can be plain email or mailto:
-                        if not (value.startswith('mailto:') or '@' in value):
-                            raise ValueError(f'{key}: Must be a valid email address or mailto: link')
-                    # All other socials must be URLs
-                    elif not (value.startswith('http://') or value.startswith('https://')):
-                        raise ValueError(f'{key}: Must be a valid URL starting with http:// or https://')
+                    # normalize_url handles email detection automatically
+                    self.__pydantic_extra__[key] = normalize_url(value)
         return self
 
 class Experience(BaseModel):
@@ -59,8 +55,9 @@ class Project(BaseModel):
     @field_validator('github_link', 'live_link')
     @classmethod
     def validate_url(cls, v):
-        if v and not (v.startswith('http://') or v.startswith('https://')):
-             raise ValueError('Must be a valid URL starting with http:// or https://')
+        if v:
+            from .utils import normalize_url
+            return normalize_url(v)
         return v
 
 class About(BaseModel):

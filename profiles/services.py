@@ -11,6 +11,7 @@ import requests
 from django.core.files.base import ContentFile
 from urllib.parse import urlparse
 import os
+from .utils import normalize_url
 
 def download_logo_from_url(url):
     """
@@ -191,8 +192,8 @@ def normalize_snapshot_service(portfolio, snapshot):
             portfolio=portfolio,
             title=proj.get('name', 'Untitled'),
             description=proj.get('description', ''),
-            repo_url=proj.get('github_link', ''),
-            live_url=proj.get('live_link', ''),
+            repo_url=normalize_url(proj.get('github_link', '')),
+            live_url=normalize_url(proj.get('live_link', '')),
             key_features=proj.get('key_features', []),
             technical_challenges=proj.get('technical_challenges', []),
             year=proj.get('year', ''),
@@ -279,7 +280,7 @@ def normalize_snapshot_service(portfolio, snapshot):
                 PortfolioSocial.objects.create(
                     portfolio=portfolio,
                     social_platform=social_reg,
-                    url=url
+                    url=normalize_url(url)
                 )
     
     # 8. Contact Section - Initialize with empty/default values
