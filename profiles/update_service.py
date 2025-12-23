@@ -73,35 +73,19 @@ def update_portfolio_from_json(portfolio, data):
     # 3. Experience
     if 'experience' in data:
         PortfolioExperience.objects.filter(portfolio=portfolio).delete()
-        from .services import normalize_date 
+        from .services import normalize_date, download_logo_from_url
         
         for exp in data['experience']:
              company_name = exp.get('company_name', '') or exp.get('company', '')
              
-             # Company Registry Logic
+             # Company Registry Logic - lookup only, NO WRITES to shared registry
              company_reg = None
              if company_name:
                  company_reg = CompanyRegistry.objects.filter(name__iexact=company_name).first()
-                 # If not found, do NOT create.
-                 
-                 # Update logo if provided in patch AND linked
-                 if company_reg:
-                     input_logo = exp.get('logo') or exp.get('logo_url')
-                     if input_logo and not company_reg.logo_file:
-                         # Import helper
-                         from .services import download_logo_from_url
-                         
-                         # If it's a URL, download it
-                         if isinstance(input_logo, str) and input_logo.startswith('http'):
-                             logo_file = download_logo_from_url(input_logo)
-                             if logo_file:
-                                 company_reg.logo_file.save(logo_file.name, logo_file, save=True)
-                         # If it's already a file object (from upload), save directly
-                         elif hasattr(input_logo, 'read'):
-                             company_reg.logo_file = input_logo
-                             company_reg.save(update_fields=['logo_file'])
+                 # If not found, do NOT create. User can still have the experience with company_name text.
 
-             PortfolioExperience.objects.create(
+             # Create the experience record
+             experience_obj = PortfolioExperience.objects.create(
                 portfolio=portfolio,
                 company=company_reg,
                 company_name=company_name,
@@ -110,7 +94,20 @@ def update_portfolio_from_json(portfolio, data):
                 end_date=normalize_date(exp.get('end_date')),
                 is_current=exp.get('is_current') or (str(exp.get('end_date', '')).lower() == 'present'),
                 description=exp.get('description') or exp.get('summary', '')
-            )
+             )
+             
+             # Handle logo - save to USER's experience, NOT the shared CompanyRegistry
+             input_logo = exp.get('logo') or exp.get('logo_url')
+             if input_logo:
+                 # If it's a URL, download it
+                 if isinstance(input_logo, str) and input_logo.startswith('http'):
+                     logo_file = download_logo_from_url(input_logo)
+                     if logo_file:
+                         experience_obj.logo.save(logo_file.name, logo_file, save=True)
+                 # If it's already a file object (from upload), save directly
+                 elif hasattr(input_logo, 'read'):
+                     experience_obj.logo = input_logo
+                     experience_obj.save(update_fields=['logo'])
 
     # 4. Projects
     if 'projects' in data:
@@ -170,12 +167,30 @@ def update_portfolio_from_json(portfolio, data):
         PortfolioEducation.objects.filter(portfolio=portfolio).delete()
         from .services import normalize_date
         for edu in data['education']:
+            # Handle both date formats: full date or just year
+            start = edu.get('start_date') or edu.get('start_year')
+            end = edu.get('end_date') or edu.get('end_year')
+            
+            # Normalize grade_type to lowercase
+            grade_type = (edu.get('grade_type') or '').lower().strip()
+            valid_types = ['cgpa', 'sgpa', 'percentage', 'gpa', 'other']
+            if grade_type not in valid_types:
+                # Try to infer from grade value
+                grade_val = edu.get('grade', '')
+                if '%' in grade_val:
+                    grade_type = 'percentage'
+                elif grade_val:
+                    grade_type = 'cgpa'  # Default assumption for numeric grades
+            
             PortfolioEducation.objects.create(
                 portfolio=portfolio,
                 institution=edu.get('institution', ''),
                 degree=edu.get('degree', ''),
-                start_date=normalize_date(edu.get('start_date')),
-                end_date=normalize_date(edu.get('end_date')),
+                field_of_study=edu.get('field_of_study', '') or edu.get('major', ''),
+                grade=edu.get('grade', ''),
+                grade_type=grade_type,
+                start_date=normalize_date(start),
+                end_date=normalize_date(end),
                 description=edu.get('description', '')
             )
             
@@ -191,3 +206,17 @@ def update_portfolio_from_json(portfolio, data):
                 s_reg = SocialRegistry.objects.filter(code_name=code).first()
                 if s_reg:
                     PortfolioSocial.objects.create(portfolio=portfolio, social_platform=s_reg, url=val)
+
+    # 7. Contact Section
+    if 'contact' in data:
+        contact = data['contact']
+        if isinstance(contact, dict):
+            # Merge with existing contact_data to allow partial updates
+            current_contact = portfolio.contact_data or {}
+            if 'message' in contact:
+                current_contact['message'] = contact['message']
+            if 'cta_text' in contact:
+                current_contact['cta_text'] = contact['cta_text']
+            portfolio.contact_data = current_contact
+            portfolio.save(update_fields=['contact_data'])
+

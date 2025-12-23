@@ -123,7 +123,7 @@ class PortfolioEducationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PortfolioEducation
-        fields = ['institution', 'degree', 'start_date', 'end_date', 'description']
+        fields = ['institution', 'degree', 'field_of_study', 'grade', 'grade_type', 'start_date', 'end_date', 'description']
 
 class PortfolioSocialSerializer(serializers.ModelSerializer):
     platform = serializers.CharField(source='social_platform.code_name')
@@ -139,13 +139,14 @@ class PortfolioCompositionSerializer(serializers.ModelSerializer):
     about = serializers.SerializerMethodField()
     socials = serializers.SerializerMethodField()
     tech_stack = serializers.SerializerMethodField()
+    contact = serializers.SerializerMethodField()
     experience = PortfolioExperienceSerializer(source='experiences', many=True)
     projects = PortfolioProjectSerializer(many=True)
     education = PortfolioEducationSerializer(many=True) # Assuming frontend might use it
     
     class Meta:
         model = Portfolio
-        fields = ['hero', 'about', 'socials', 'tech_stack', 'experience', 'projects', 'education']
+        fields = ['hero', 'about', 'socials', 'tech_stack', 'experience', 'projects', 'education', 'contact']
         
     def get_hero(self, obj):
         # Construct Hero object
@@ -187,6 +188,14 @@ class PortfolioCompositionSerializer(serializers.ModelSerializer):
         # Add missing tech
         missing = obj.missing_tech_stack if obj.missing_tech_stack else []
         return registered + missing
+    
+    def get_contact(self, obj):
+        # Return contact section data with defaults
+        contact_data = obj.contact_data or {}
+        return {
+            'message': contact_data.get('message', ''),
+            'cta_text': contact_data.get('cta_text', '')
+        }
 
 from rest_framework import serializers
 from .models import CompanyRegistry

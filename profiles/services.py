@@ -234,16 +234,33 @@ def normalize_snapshot_service(portfolio, snapshot):
                 project_obj.save(update_fields=['thumbnail'])
 
     # 6. Education
-    # (Schema didn't show education in user example, but if present logic remains same)
     PortfolioEducation.objects.filter(portfolio=portfolio).delete()
     education_list = data.get('education', [])
     for edu in education_list:
+        # Handle both date formats: full date or just year
+        start = edu.get('start_date') or edu.get('start_year')
+        end = edu.get('end_date') or edu.get('end_year')
+        
+        # Normalize grade_type to lowercase
+        grade_type = (edu.get('grade_type') or '').lower().strip()
+        valid_types = ['cgpa', 'sgpa', 'percentage', 'gpa', 'other']
+        if grade_type not in valid_types:
+            # Try to infer from grade value
+            grade_val = edu.get('grade', '')
+            if '%' in str(grade_val):
+                grade_type = 'percentage'
+            elif grade_val:
+                grade_type = 'cgpa'  # Default assumption for numeric grades
+        
         PortfolioEducation.objects.create(
             portfolio=portfolio,
             institution=edu.get('institution', ''),
             degree=edu.get('degree', ''),
-            start_date=normalize_date(edu.get('start_date')),
-            end_date=normalize_date(edu.get('end_date')),
+            field_of_study=edu.get('field_of_study', '') or edu.get('major', ''),
+            grade=edu.get('grade', ''),
+            grade_type=grade_type,
+            start_date=normalize_date(start),
+            end_date=normalize_date(end),
             description=edu.get('description', '')
         )
 
@@ -265,4 +282,14 @@ def normalize_snapshot_service(portfolio, snapshot):
                     url=url
                 )
     
+    # 8. Contact Section - Initialize with empty/default values
+    # This creates an empty contact section that users can edit later
+    if not portfolio.contact_data:
+        portfolio.contact_data = {
+            'message': '',
+            'cta_text': ''
+        }
+        portfolio.save(update_fields=['contact_data'])
+    
     return True
+

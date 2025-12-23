@@ -138,6 +138,7 @@ class GoogleOAuthCallbackView(APIView):
                 defaults={
                     "email": email,
                     "name": id_info.get("name", ""),
+                    "authentication_method": "google",
                 },
             )
 

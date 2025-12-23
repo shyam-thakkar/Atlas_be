@@ -104,6 +104,47 @@ GENERATION RULES:
 - Avoid generic statements like "Built a web app"
 
 ━━━━━━━━━━━━━━━━━━━━━━
+EDUCATION EXTRACTION (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━
+For each educational qualification, extract:
+
+1. **institution**: Full name of school/university (EXACT)
+   - Example: "Indian Institute of Technology Delhi", "Stanford University"
+
+2. **degree**: Full degree name (EXACT)
+   - Example: "Bachelor of Technology", "Master of Science", "Ph.D."
+
+3. **field_of_study**: Major/specialization 
+   - Example: "Computer Science", "Electrical Engineering", "Data Science"
+   - Extract from degree line or infer if clear
+
+4. **grade**: Academic grade/score (EXACT as written)
+   - Extract the EXACT value: "8.5", "3.8", "85%", "First Class"
+   - DO NOT modify or normalize the value
+
+5. **grade_type**: Type of grading system (CRITICAL)
+   - "cgpa" - Cumulative GPA (common in India, scale of 10)
+   - "sgpa" - Semester GPA
+   - "gpa" - Grade Point Average (US, typically 4.0 scale)
+   - "percentage" - Percentage score (contains % or context suggests)
+   - "other" - For class ranks, honors, etc.
+   
+   DETECTION RULES:
+   - If grade contains "%" → "percentage"
+   - If grade is 0-4.0 range → "gpa"
+   - If grade is 0-10 range → "cgpa"
+   - If text says "CGPA" → "cgpa"
+   - If text says "GPA" → "gpa"
+
+6. **start_year**: Start year only (e.g., "2018")
+
+7. **end_year**: End year or "Present" (e.g., "2022")
+
+8. **description**: Relevant coursework, honors, activities
+   - Include GPA context if mentioned
+   - Include any awards or achievements
+
+━━━━━━━━━━━━━━━━━━━━━━
 TECH STACK EXTRACTION RULES
 ━━━━━━━━━━━━━━━━━━━━━━
 Extract ONLY:

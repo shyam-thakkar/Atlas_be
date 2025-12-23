@@ -121,6 +121,7 @@ class Portfolio(models.Model):
     theme = models.CharField(max_length=50, default='default')
     is_published = models.BooleanField(default=False)
     missing_tech_stack = models.JSONField(default=list, blank=True, help_text="List of tech names not found in Registry")
+    contact_data = models.JSONField(default=dict, blank=True, help_text="Contact section data: message, cta_text")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -190,7 +191,7 @@ class PortfolioExperience(models.Model):
     end_date = models.DateField(null=True, blank=True)
     description = models.TextField(blank=True)
     is_current = models.BooleanField(default=False)
-    logo = models.ImageField(upload_to='company_logos/', null=True, blank=True)
+    logo = models.ImageField(upload_to='company_logos/', null=True, blank=True, max_length=255)
     
     # Media: Company logo can be accessed via Media generic relation
     
@@ -231,9 +232,20 @@ class PortfolioProject(models.Model):
         return self.title
 
 class PortfolioEducation(models.Model):
+    GRADE_TYPE_CHOICES = [
+        ('cgpa', 'CGPA'),
+        ('sgpa', 'SGPA'),
+        ('percentage', 'Percentage'),
+        ('gpa', 'GPA'),
+        ('other', 'Other'),
+    ]
+    
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='education')
     institution = models.CharField(max_length=255)
     degree = models.CharField(max_length=255)
+    field_of_study = models.CharField(max_length=255, blank=True, help_text="e.g., Computer Science")
+    grade = models.CharField(max_length=20, blank=True, help_text="e.g., 8.5, 85%, 3.8")
+    grade_type = models.CharField(max_length=20, choices=GRADE_TYPE_CHOICES, blank=True, help_text="Type of grading system")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     description = models.TextField(blank=True)

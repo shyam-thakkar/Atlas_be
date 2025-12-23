@@ -20,6 +20,18 @@ class ResumeView(APIView):
             return Response({"error": "No resume found"}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
+        # Check tier limit before allowing upload
+        user = request.user
+        if not user.can_process_resume():
+            limit = user.get_resume_limit()
+            return Response({
+                "error": "Resume processing limit reached",
+                "message": f"Your {user.get_user_tier_display()} tier allows {limit} resume processing. Please upgrade to continue.",
+                "limit": limit,
+                "used": user.resume_process_count,
+                "tier": user.user_tier
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
@@ -52,6 +64,9 @@ class ResumeView(APIView):
                 'error_message': None
             }
         )
+
+        # Increment resume process count
+        user.increment_resume_count()
 
         # Trigger Async Task
         process_resume_task.delay(resume.id)
@@ -507,8 +522,15 @@ class CompanyLogoUploadView(APIView):
     def post(self, request):
         """
         Upload a company logo file.
+        Saves to user's PortfolioExperience.logo (user-scoped), NOT the shared CompanyRegistry.
         Expects: company_name (string) and logo (file)
         """
+        from .models import Portfolio, PortfolioExperience
+        from .utils import get_absolute_media_url
+        from django.core.files.base import ContentFile
+        import re
+        import uuid
+        
         company_name = request.data.get('company_name')
         logo_file = request.FILES.get('logo')
         
@@ -524,19 +546,57 @@ class CompanyLogoUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Find or create company (case-insensitive)
-        company = CompanyRegistry.objects.filter(name__iexact=company_name).first()
-        
-        if not company:
-            company = CompanyRegistry.objects.create(
-                name=company_name,
-                is_verified=False
+        # Find user's portfolio
+        portfolio = Portfolio.objects.filter(user=request.user).first()
+        if not portfolio:
+            return Response(
+                {"error": "Portfolio not found. Please upload a resume first."}, 
+                status=status.HTTP_404_NOT_FOUND
             )
         
-        # Save the logo
-        company.logo_file = logo_file
-        company.save()
+        # Find the experience entry for this company (case-insensitive)
+        experience = PortfolioExperience.objects.filter(
+            portfolio=portfolio,
+            company_name__iexact=company_name
+        ).first()
+        
+        if not experience:
+            return Response(
+                {"error": f"No experience found for company '{company_name}'"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Sanitize filename to prevent SuspiciousFileOperation errors
+        original_name = logo_file.name
+        
+        # Get extension
+        ext = os.path.splitext(original_name)[1].lower()
+        if not ext:
+            ext = '.png'  # Default extension
+        
+        # Sanitize company name for filename (remove special chars, limit length)
+        safe_company = re.sub(r'[^\w\s-]', '', company_name)[:30].strip().replace(' ', '_').lower()
+        
+        # Generate a clean, short filename
+        short_id = uuid.uuid4().hex[:8]
+        sanitized_name = f"{safe_company}_{short_id}{ext}"
+        
+        # Ensure it's not too long (max ~50 chars for safety)
+        if len(sanitized_name) > 50:
+            sanitized_name = f"logo_{short_id}{ext}"
+        
+        # Rename the file
+        logo_file.name = sanitized_name
+        
+        # Save the logo to user's experience (NOT the shared CompanyRegistry)
+        experience.logo = logo_file
+        experience.save(update_fields=['logo'])
         
         # Return the logo URL
-        serializer = CompanyRegistrySerializer(company, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        logo_url = get_absolute_media_url(experience.logo)
+        
+        return Response({
+            "company_name": experience.company_name,
+            "logo_url": logo_url
+        }, status=status.HTTP_200_OK)
+

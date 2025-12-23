@@ -4,8 +4,8 @@ from .models import User
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('email', 'name', 'is_staff', 'is_active', 'created_at')
-    list_filter = ('is_staff', 'is_active')
+    list_display = ('email', 'name', 'user_tier', 'authentication_method', 'resume_process_count', 'is_staff', 'is_active', 'created_at')
+    list_filter = ('is_staff', 'is_active', 'user_tier', 'authentication_method')
     search_fields = ('email', 'name')
     ordering = ('email',)
     
@@ -20,6 +20,8 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('name',)}),
+        ('Account', {'fields': ('user_tier', 'authentication_method', 'resume_process_count')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'created_at')}),
     )
+

@@ -10,8 +10,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'name', 'created_at', 'profile_image')
-        read_only_fields = ('id', 'created_at', 'profile_image')
+        fields = ('id', 'email', 'name', 'created_at', 'profile_image', 'user_tier', 'authentication_method', 'resume_process_count')
+        read_only_fields = ('id', 'created_at', 'profile_image', 'user_tier', 'authentication_method', 'resume_process_count')
 
     def get_profile_image(self, obj):
         try:

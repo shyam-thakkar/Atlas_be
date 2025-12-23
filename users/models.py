@@ -24,12 +24,37 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
+    TIER_CHOICES = [
+        ('beta', 'Beta'),
+        ('free', 'Free'),
+        ('pro', 'Pro'),
+        ('enterprise', 'Enterprise'),
+    ]
+    
+    # Tier limits for resume processing
+    TIER_LIMITS = {
+        'beta': 5,
+        'free': 3,
+        'pro': 50,
+        'enterprise': -1,  # Unlimited
+    }
+    
+    AUTH_METHOD_CHOICES = [
+        ('email', 'Email/Password'),
+        ('google', 'Google'),
+    ]
+    
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=255, blank=True)
     google_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
+    
+    # Account fields
+    user_tier = models.CharField(max_length=20, choices=TIER_CHOICES, default='beta')
+    authentication_method = models.CharField(max_length=20, choices=AUTH_METHOD_CHOICES, default='email')
+    resume_process_count = models.PositiveIntegerField(default=0, help_text="Number of times user has processed a resume")
 
     objects = UserManager()
 
@@ -38,3 +63,20 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+    
+    def get_resume_limit(self):
+        """Returns the resume processing limit for the user's tier."""
+        return self.TIER_LIMITS.get(self.user_tier, 3)
+    
+    def can_process_resume(self):
+        """Check if user can process another resume based on their tier limit."""
+        limit = self.get_resume_limit()
+        if limit == -1:  # Unlimited
+            return True
+        return self.resume_process_count < limit
+    
+    def increment_resume_count(self):
+        """Increment the resume process count."""
+        self.resume_process_count += 1
+        self.save(update_fields=['resume_process_count'])
+

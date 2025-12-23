@@ -66,6 +66,16 @@ class Project(BaseModel):
 class About(BaseModel):
     long_bio: str = Field(description="Detailed professional biography. Generate a comprehensive narrative of the candidate's journey and expertise based on the resume.")
 
+class Education(BaseModel):
+    institution: str = Field(description="Name of the educational institution (e.g., 'MIT', 'Stanford University')")
+    degree: str = Field(description="Degree obtained (e.g., 'Bachelor of Technology', 'Master of Science')")
+    field_of_study: str = Field(default="", description="Field/major (e.g., 'Computer Science', 'Electrical Engineering')")
+    grade: str = Field(default="", description="Grade obtained (e.g., '8.5', '85%', '3.8'). Extract EXACT value from resume.")
+    grade_type: str = Field(default="", description="Type of grading: 'cgpa', 'sgpa', 'percentage', 'gpa', or 'other'. Infer from grade format.")
+    start_year: str = Field(default="", description="Start year (e.g., '2018')")
+    end_year: str = Field(default="", description="End year or 'Present' (e.g., '2022')")
+    description: str = Field(default="", description="Additional details like honors, relevant coursework, activities")
+
 class PortfolioSchema(BaseModel):
     model_config = ConfigDict(extra='forbid')
     hero: Hero
@@ -73,4 +83,5 @@ class PortfolioSchema(BaseModel):
     tech_stack: List[str] = Field(description="List of technical skills")
     experience: List[Experience]
     projects: List[Project]
+    education: List[Education] = Field(default_factory=list, description="List of educational qualifications")
     about: About
