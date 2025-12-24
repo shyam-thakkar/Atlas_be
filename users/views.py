@@ -67,12 +67,14 @@ class GoogleOAuthStartView(APIView):
         state = secrets.token_urlsafe(32)
 
         # Build Google OAuth URL
+        # prompt=select_account forces Google to show account picker even if already logged in
         google_auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth"
             "?response_type=code"
             f"&client_id={settings.GOOGLE_CLIENT_ID}"
             f"&redirect_uri={settings.GOOGLE_CALLBACK_URL}"
             "&scope=openid email profile"
+            "&prompt=select_account"
             f"&state={state}"
         )
 

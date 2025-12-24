@@ -333,7 +333,7 @@ class PortfolioProject(models.Model):
     # New fields for rich project details
     key_features = models.JSONField(default=list, blank=True, help_text="List of key features")
     technical_challenges = models.JSONField(default=list, blank=True, help_text="List of technical challenges")
-    year = models.CharField(max_length=10, blank=True, help_text="Year of completion (e.g., '2024')")
+    year = models.CharField(max_length=24, blank=True, help_text="Year of completion (e.g., '2024')")
     project_type = models.CharField(max_length=100, blank=True, help_text="e.g., 'Solo Project', 'Team Project'")
     thumbnail = models.ImageField(upload_to='project_thumbnails/', null=True, blank=True, help_text="Project screenshot/thumbnail")
     missing_technologies = models.JSONField(default=list, blank=True, help_text="List of tech names not found in Registry")
