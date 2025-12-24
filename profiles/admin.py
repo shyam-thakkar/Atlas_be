@@ -37,8 +37,30 @@ class SocialRegistryAdmin(admin.ModelAdmin):
 from .models import (
     Portfolio, Media, PortfolioProfile, PortfolioTech, PortfolioExperience,
     PortfolioProject, PortfolioEducation, PortfolioSocial, PortfolioAISnapshot,
-    CompanyRegistry
+    CompanyRegistry, Username, ReservedUsername, PublishedSnapshot
 )
+
+@admin.register(Username)
+class UsernameAdmin(admin.ModelAdmin):
+    list_display = ('username', 'user', 'created_at', 'updated_at')
+    search_fields = ('username', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('username',)
+
+@admin.register(ReservedUsername)
+class ReservedUsernameAdmin(admin.ModelAdmin):
+    list_display = ('username', 'reason', 'created_at')
+    search_fields = ('username', 'reason')
+    readonly_fields = ('created_at',)
+    ordering = ('username',)
+
+@admin.register(PublishedSnapshot)
+class PublishedSnapshotAdmin(admin.ModelAdmin):
+    list_display = ('portfolio', 'version', 'is_active', 'published_at')
+    list_filter = ('is_active', 'published_at')
+    search_fields = ('portfolio__user__email', 'portfolio__title')
+    readonly_fields = ('published_at', 'snapshot_data')
+    ordering = ('-published_at',)
 
 @admin.register(CompanyRegistry)
 class CompanyRegistryAdmin(admin.ModelAdmin):
@@ -76,11 +98,20 @@ class PortfolioAISnapshotInline(admin.StackedInline):
     extra = 0
     readonly_fields = ('created_at',)
 
+class PublishedSnapshotInline(admin.TabularInline):
+    model = PublishedSnapshot
+    extra = 0
+    readonly_fields = ('version', 'is_active', 'published_at')
+    fields = ('version', 'is_active', 'published_at')
+    ordering = ('-version',)
+    can_delete = False
+
 @admin.register(Portfolio)
 class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ('user', 'title', 'is_published', 'created_at', 'updated_at')
-    list_filter = ('is_published', 'created_at')
-    search_fields = ('user__email', 'title')
+    list_display = ('user', 'title', 'username', 'is_published', 'created_at', 'updated_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__email', 'title', 'username__username')
+    readonly_fields = ('is_published', 'public_url')
     inlines = [
         PortfolioProfileInline,
         PortfolioTechInline,
@@ -89,6 +120,7 @@ class PortfolioAdmin(admin.ModelAdmin):
         PortfolioEducationInline,
         PortfolioSocialInline,
         PortfolioAISnapshotInline,
+        PublishedSnapshotInline,
     ]
 
 @admin.register(Media)
@@ -96,3 +128,4 @@ class MediaAdmin(admin.ModelAdmin):
     list_display = ('media_type', 'owner', 'created_at')
     list_filter = ('media_type', 'created_at')
     readonly_fields = ('created_at',)
+

@@ -39,6 +39,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         'enterprise': -1,  # Unlimited
     }
     
+    # Tier limits for username changes
+    USERNAME_CHANGE_LIMITS = {
+        'beta': 1,
+        'free': 2,
+        'pro': 5,
+        'enterprise': -1,  # Unlimited
+    }
+    
     AUTH_METHOD_CHOICES = [
         ('email', 'Email/Password'),
         ('google', 'Google'),
@@ -55,6 +63,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     user_tier = models.CharField(max_length=20, choices=TIER_CHOICES, default='beta')
     authentication_method = models.CharField(max_length=20, choices=AUTH_METHOD_CHOICES, default='email')
     resume_process_count = models.PositiveIntegerField(default=0, help_text="Number of times user has processed a resume")
+    username_change_count = models.PositiveIntegerField(default=0, help_text="Number of times user has changed their portfolio username")
 
     objects = UserManager()
 
@@ -79,4 +88,27 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Increment the resume process count."""
         self.resume_process_count += 1
         self.save(update_fields=['resume_process_count'])
+    
+    def get_username_change_limit(self):
+        """Returns the username change limit for the user's tier."""
+        return self.USERNAME_CHANGE_LIMITS.get(self.user_tier, 1)
+    
+    def can_change_username(self):
+        """Check if user can change their username based on tier limit."""
+        limit = self.get_username_change_limit()
+        if limit == -1:  # Unlimited
+            return True
+        return self.username_change_count < limit
+    
+    def get_remaining_username_changes(self):
+        """Returns number of username changes remaining, or -1 for unlimited."""
+        limit = self.get_username_change_limit()
+        if limit == -1:
+            return -1
+        return max(0, limit - self.username_change_count)
+    
+    def increment_username_change_count(self):
+        """Increment the username change count."""
+        self.username_change_count += 1
+        self.save(update_fields=['username_change_count'])
 

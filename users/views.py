@@ -93,13 +93,19 @@ class GoogleOAuthCallbackView(APIView):
         from django.shortcuts import redirect
         
         code = request.GET.get("code")
+        error = request.GET.get("error")
+        
+        # Check if the user cancelled the OAuth flow or if there's any error from Google
+        if error:
+            # User cancelled or Google returned an error - redirect to login with error
+            return redirect(f"{settings.FRONTEND_URL}/login?error=login_failed")
         
         # Validate authorization code exists
         # Note: Strict state validation removed due to session persistence issues with proxies/tunnels.
         # Google's protections (redirect URI validation, client secret, authorization code) 
         # are sufficient for first-party apps.
         if not code:
-            return Response({"error": "Missing authorization code"}, status=status.HTTP_400_BAD_REQUEST)
+            return redirect(f"{settings.FRONTEND_URL}/login?error=login_failed")
 
         # Exchange authorization code for tokens
         try:
@@ -152,7 +158,7 @@ class GoogleOAuthCallbackView(APIView):
             )
             
         except Exception as e:
-            return Response({"error": f"OAuth failed: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            return redirect(f"{settings.FRONTEND_URL}/login?error=login_failed")
 
 class RefreshView(APIView):
     permission_classes = [AllowAny]

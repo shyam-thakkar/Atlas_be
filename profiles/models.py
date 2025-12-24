@@ -115,18 +115,133 @@ class SocialRegistry(models.Model):
         self.code_name = self.code_name.lower().replace(' ', '-')
         super().save(*args, **kwargs)
 
+
+class Username(models.Model):
+    """
+    Global username registry. Each username can only be owned by one user.
+    Username can be changed based on tier limits.
+    """
+    username = models.CharField(
+        max_length=50, 
+        unique=True, 
+        db_index=True,
+        help_text="Lowercase, URL-safe username (e.g., 'johndoe')"
+    )
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='portfolio_username'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['username']),
+        ]
+    
+    def __str__(self):
+        return f"{self.username} -> {self.user.email}"
+
+
+class ReservedUsername(models.Model):
+    """
+    Usernames that cannot be claimed by users.
+    E.g., 'admin', 'api', 'www', 'support', etc.
+    """
+    username = models.CharField(max_length=50, unique=True, db_index=True)
+    reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Reserved Username"
+        verbose_name_plural = "Reserved Usernames"
+    
+    def __str__(self):
+        return self.username
+
+
 class Portfolio(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='portfolios')
     title = models.CharField(max_length=255, default="My Portfolio")
     theme = models.CharField(max_length=50, default='default')
-    is_published = models.BooleanField(default=False)
+    # Username for public URL - OneToOne because one portfolio per user
+    username = models.OneToOneField(
+        'Username',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='portfolio',
+        help_text="Claimed username for public URL (e.g., username.aifolio.in)"
+    )
     missing_tech_stack = models.JSONField(default=list, blank=True, help_text="List of tech names not found in Registry")
     contact_data = models.JSONField(default=dict, blank=True, help_text="Contact section data: message, cta_text")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    @property
+    def is_published(self):
+        """Portfolio is published if it has an active snapshot."""
+        return self.published_snapshots.filter(is_active=True).exists()
+    
+    @property
+    def public_url(self):
+        """Returns the public URL for this portfolio if username is claimed."""
+        from django.conf import settings
+        if self.username:
+            # PORTFOLIO_URL_TEMPLATE should be like:
+            # Production: "https://{username}.aifolio.in"
+            # Development: "http://localhost:3000/portfolio/{username}"
+            template = getattr(settings, 'PORTFOLIO_URL_TEMPLATE', 'http://localhost:3000/portfolio/{username}')
+            return template.format(username=self.username.username)
+        return None
+    
+    @property
+    def active_snapshot(self):
+        """Returns the currently active published snapshot, or None."""
+        return self.published_snapshots.filter(is_active=True).first()
 
     def __str__(self):
         return f"{self.user.email} - {self.title}"
+
+
+class PublishedSnapshot(models.Model):
+    """
+    Immutable snapshot of a portfolio at publish time.
+    Only the latest active snapshot is public; older ones are kept for history/rollback.
+    """
+    portfolio = models.ForeignKey(
+        Portfolio, 
+        on_delete=models.CASCADE, 
+        related_name='published_snapshots'
+    )
+    version = models.PositiveIntegerField(default=1)
+    snapshot_data = models.JSONField(
+        help_text="Complete serialized portfolio state at publish time"
+    )
+    is_active = models.BooleanField(
+        default=True, 
+        help_text="True for the currently public version"
+    )
+    published_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-published_at']
+        indexes = [
+            models.Index(fields=['portfolio', 'is_active']),
+        ]
+        constraints = [
+            # Ensure only one active snapshot per portfolio
+            models.UniqueConstraint(
+                fields=['portfolio'],
+                condition=models.Q(is_active=True),
+                name='unique_active_snapshot_per_portfolio'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.portfolio} v{self.version} ({'active' if self.is_active else 'archived'})"
+
 
 class Media(models.Model):
     MEDIA_TYPE_CHOICES = [

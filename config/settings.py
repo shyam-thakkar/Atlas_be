@@ -25,6 +25,12 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_CALLBACK_URL = os.getenv('GOOGLE_CALLBACK_URL', 'http://localhost:8000/api/auth/google/callback/')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
+# Portfolio public URL template
+# Use {username} as placeholder for the username
+# Development: "http://localhost:3000/portfolio/{username}"
+# Production:  "https://{username}.aifolio.in"
+PORTFOLIO_URL_TEMPLATE = os.getenv('PORTFOLIO_URL_TEMPLATE', 'http://localhost:3000/portfolio/{username}')
+
 
 # Application definition
 
@@ -169,9 +175,22 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = False 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://qgwkmvmz-3000.inc1.devtunnels.ms"
+    "https://qgwkmvmz-3000.inc1.devtunnels.ms",
+    "https://aifolio.in",
+    "https://www.aifolio.in",
 ]
+
+# Allow all *.aifolio.in subdomains via regex
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://[\w-]+\.aifolio\.in$",  # Matches any subdomain like username.aifolio.in
+]
+
 CORS_ALLOW_CREDENTIALS = True
+
+# Session/Cookie settings for cross-subdomain auth (if using cookies)
+# This allows cookies to be shared across all *.aifolio.in subdomains
+SESSION_COOKIE_DOMAIN = os.getenv('COOKIE_DOMAIN', None)  # Set to '.aifolio.in' in production
+CSRF_COOKIE_DOMAIN = os.getenv('COOKIE_DOMAIN', None)  # Set to '.aifolio.in' in production
 
 # Celery Configuration
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
@@ -180,3 +199,4 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+

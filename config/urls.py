@@ -16,11 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from profiles.views_publish import PublicPortfolioView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('users.urls')),
     path('api/profile/', include('profiles.urls')),
+    
+    # Public portfolio access (no auth required)
+    path('api/public/portfolio/<str:username>/', PublicPortfolioView.as_view(), name='public-portfolio'),
 ]
 
 from django.conf import settings
