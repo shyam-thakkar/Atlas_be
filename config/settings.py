@@ -35,6 +35,7 @@ PORTFOLIO_URL_TEMPLATE = os.getenv('PORTFOLIO_URL_TEMPLATE', 'http://localhost:3
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # Must be before django.contrib.staticfiles for ASGI
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -46,10 +47,12 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'channels',
 
     # Local
     'users',
     'profiles',
+    'chat',
 ]
 
 MIDDLEWARE = [
@@ -199,4 +202,17 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+# ASGI Application (for Django Channels)
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channel Layers (for WebSocket support)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [(os.getenv('REDIS_HOST', '127.0.0.1'), int(os.getenv('REDIS_PORT', 6379)))],
+        },
+    },
+}
 

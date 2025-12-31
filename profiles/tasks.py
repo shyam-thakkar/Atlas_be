@@ -102,6 +102,11 @@ def process_resume_task(resume_id):
             # 3. Normalize Data
             normalize_snapshot_service(portfolio, snapshot)
             # ---------------------------
+            
+            # 4. Trigger RAG document rebuild (async, outside transaction)
+            # This will run after transaction commits
+            from chat.tasks import rebuild_user_rag_documents
+            rebuild_user_rag_documents.delay(resume.user.id)
 
             # Step 4: Structure Extracted
             update_status('structure_extracted')
