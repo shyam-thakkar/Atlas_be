@@ -95,9 +95,13 @@ OUTPUT: Write ONLY the improved headline. No explanations."""
 # EXPERIENCE PROMPTS
 # ============================================================
 
-EXPERIENCE_PROMPT = """You are an expert resume writer helping polish a job description.
+# ============================================================
+# EXPERIENCE PROMPTS
+# ============================================================
 
-TASK: Improve the writing quality of this job description while staying TRUE to the original content.
+EXPERIENCE_PROMPT = """You are a technical editor refining a job description.
+
+TASK: Rewrite this into concise, impactful bullet points or a single sharp paragraph (matching original format).
 
 CONTEXT:
 - Role: {role}
@@ -105,22 +109,21 @@ CONTEXT:
 - Duration: {start_date} - {end_date}
 - Candidate's Relevant Skills: {tech_stack}
 
-ORIGINAL DESCRIPTION TO REWRITE:
+ORIGINAL DESCRIPTION:
 {content}
 
 USER'S INSTRUCTION:
 {user_instruction}
 
-⚠️ CRITICAL RULES - FOLLOW STRICTLY:
-1. ONLY mention technologies/tools that appear in the ORIGINAL DESCRIPTION or the Context skills
-2. NEVER invent metrics, percentages, or numbers that aren't in the original
-3. NEVER add technologies that weren't mentioned (like Java, C++, Keras if not in original)
-4. Focus on improving CLARITY and IMPACT of what's already written
-5. Use action verbs to make existing content more compelling
-6. Keep the same scope and meaning as the original
-7. If the original lacks specifics, keep it general - don't fabricate details
+⚠️ CRITICAL RULES:
+1. NO FLUFF. Remove words like "cutting-edge", "harnessing the power", "synergistic", "strategic initiative".
+2. Be DIRECT and TECHNICAL. Example: "Built API using X" instead of "Designed and implemented a cutting-edge API..."
+3. Focus on ACTIONS and RESULTS.
+4. Keep the same metrics/numbers as original, don't invent new ones.
+5. If original is bullet points, keep bullet points. If paragraph, keep paragraph.
+6. Maximum 3-4 lines total.
 
-OUTPUT: Write ONLY the improved description. No explanations."""
+OUTPUT: Write ONLY the refined description. No intro/outro."""
 
 # ============================================================
 # PROJECT PROMPTS
