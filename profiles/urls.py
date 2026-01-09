@@ -15,6 +15,7 @@ from .views_publish import (
     UnpublishPortfolioView,
     PublishHistoryView,
 )
+from .views_rewrite import RewriteDescriptionView
 from django.urls import path
 
 urlpatterns = [
@@ -51,4 +52,7 @@ urlpatterns = [
     path('portfolio/photo/', ProfilePhotoUploadView.as_view(), name='profile-photo-upload'),
     path('portfolio/company-logo/', CompanyLogoUploadView.as_view(), name='company-logo-upload'),
     path('portfolio/project-thumbnail/', ProjectThumbnailUploadView.as_view(), name='project-thumbnail-upload'),
+    
+    # AI Rewrite
+    path('rewrite/', RewriteDescriptionView.as_view(), name='rewrite-description'),
 ]
