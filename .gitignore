@@ -50,4 +50,4 @@ migrations/
 venv/
 .vscode/
 media/
->>>>>>> 971e89f (initial commit)
+celerybeat-schedule

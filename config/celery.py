@@ -18,3 +18,12 @@ app.autodiscover_tasks()
 @app.task(bind=True)
 def debug_task(self):
     print(f'Request: {self.request!r}')
+
+from celery.schedules import crontab
+
+app.conf.beat_schedule = {
+    'check-expired-subscriptions-daily': {
+        'task': 'users.tasks.check_expired_subscriptions',
+        'schedule': crontab(hour=0, minute=0),  # Run daily at midnight
+    },
+}

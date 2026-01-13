@@ -25,26 +25,23 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     TIER_CHOICES = [
-        ('beta', 'Beta'),
         ('free', 'Free'),
         ('pro', 'Pro'),
-        ('enterprise', 'Enterprise'),
+        ('lifetime', 'Lifetime'),
     ]
     
     # Tier limits for resume processing
     TIER_LIMITS = {
-        'beta': 5,
-        'free': 3,
-        'pro': 50,
-        'enterprise': -1,  # Unlimited
+        'free': 5,       # Free tier: 1 AI Portfolio Generation
+        'pro': -1,       # Pro: Unlimited AI Generations
+        'lifetime': -1,  # Lifetime: Unlimited
     }
     
     # Tier limits for username changes
     USERNAME_CHANGE_LIMITS = {
-        'beta': 1,
-        'free': 2,
-        'pro': 5,
-        'enterprise': -1,  # Unlimited
+        'free': 1,
+        'pro': -1,       # Unlimited
+        'lifetime': -1,  # Unlimited
     }
     
     AUTH_METHOD_CHOICES = [
@@ -59,8 +56,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
     
+    
+    PLAN_TYPE_CHOICES = [
+        ('free', 'Free'),
+        ('pro_monthly', 'Pro Monthly'),
+        ('lifetime', 'Lifetime'),
+    ]
+
     # Account fields
-    user_tier = models.CharField(max_length=20, choices=TIER_CHOICES, default='beta')
+    user_tier = models.CharField(max_length=20, choices=TIER_CHOICES, default='free')
+    plan_type = models.CharField(max_length=20, choices=PLAN_TYPE_CHOICES, default='free')
+    subscription_expiry = models.DateTimeField(null=True, blank=True, help_text="Expiery date for subscription")
     authentication_method = models.CharField(max_length=20, choices=AUTH_METHOD_CHOICES, default='email')
     resume_process_count = models.PositiveIntegerField(default=0, help_text="Number of times user has processed a resume")
     username_change_count = models.PositiveIntegerField(default=0, help_text="Number of times user has changed their portfolio username")

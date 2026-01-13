@@ -4,7 +4,8 @@ from .models import User
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('email', 'name', 'user_tier', 'authentication_method', 'resume_process_count', 'is_staff', 'is_active', 'created_at')
+    list_display = ('email', 'name', 'user_tier', 'plan_type', 'subscription_expiry', 'authentication_method', 'resume_process_count', 'username_change_count', 'is_staff', 'is_active', 'created_at')
+    list_filter = ('is_staff', 'is_active', 'user_tier', 'plan_type', 'authentication_method')
     list_filter = ('is_staff', 'is_active', 'user_tier', 'authentication_method')
     search_fields = ('email', 'name')
     ordering = ('email',)
@@ -19,9 +20,11 @@ class UserAdmin(BaseUserAdmin):
     ordering = ['email']
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
-        ('Personal info', {'fields': ('name',)}),
-        ('Account', {'fields': ('user_tier', 'authentication_method', 'resume_process_count')}),
+        ('Personal info', {'fields': ('name', 'google_id')}),
+        ('Subscription', {'fields': ('user_tier', 'plan_type', 'subscription_expiry')}),
+        ('Account', {'fields': ('authentication_method', 'resume_process_count', 'username_change_count')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'created_at')}),
     )
+    readonly_fields = ('created_at', 'last_login', 'google_id')
 

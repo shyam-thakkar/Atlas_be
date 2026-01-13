@@ -25,6 +25,10 @@ GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_CALLBACK_URL = os.getenv('GOOGLE_CALLBACK_URL', 'http://localhost:8000/api/auth/google/callback/')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
+# Razorpay Configuration
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET')
+
 # Portfolio public URL template
 # Use {username} as placeholder for the username
 # Development: "http://localhost:3000/portfolio/{username}"
@@ -53,6 +57,7 @@ INSTALLED_APPS = [
     'users',
     'profiles',
     'chat',
+    'payments',
 ]
 
 MIDDLEWARE = [

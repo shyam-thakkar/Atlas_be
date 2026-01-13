@@ -19,3 +19,4 @@ requests
 google-auth
 pgvector
 Pillow
+razorpay
