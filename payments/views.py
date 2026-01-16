@@ -11,7 +11,7 @@ class CreateOrderView(APIView):
     permission_classes = [IsAuthenticated]
     
     PLAN_PRICES = {
-        'pro_monthly': 14900,  # 149 INR
+        'pro_monthly': 4900,   # 49 INR
         'lifetime': 49900      # 499 INR
     }
 
