@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/profile/', include('profiles.urls')),
     path('api/chat/', include('chat.urls')),
     path('api/payments/', include('payments.urls')),
+    path('api/admin/', include('admin_api.urls')),  # Admin Panel APIs
     
     # Public portfolio access (no auth required)
     path('api/public/portfolio/<str:username>/', PublicPortfolioView.as_view(), name='public-portfolio'),

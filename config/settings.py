@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'profiles',
     'chat',
     'payments',
+    'admin_api',
 ]
 
 MIDDLEWARE = [

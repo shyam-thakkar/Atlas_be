@@ -20,3 +20,4 @@ google-auth
 pgvector
 Pillow
 razorpay
+drf-nested-routers
